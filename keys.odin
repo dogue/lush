@@ -28,6 +28,10 @@ ShortcutKey :: enum {
 ControlChar :: enum {
     Backspace,
     Return,
+    UpArrow,
+    DownArrow,
+    LeftArrow,
+    RightArrow,
 }
 
 EOF :: struct{}

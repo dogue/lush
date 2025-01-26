@@ -25,9 +25,7 @@ spawn :: proc(args: ..cstring) -> (process: Process, err: posix.Errno) {
 
         ret := posix.execvp(nil_term_args[0], raw_data(nil_term_args))
         if ret != 0 {
-            errno := posix.errno()
-            errstr := posix.strerror(errno)
-            fmt.panicf("Child process failed: %v, %v\n", errno, errstr)
+            err = posix.errno()
         }
     }
 

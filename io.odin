@@ -42,8 +42,15 @@ read_key :: proc() -> Key {
             i += 1
         }
 
-        fmt.fprintf(os.stdout, "ANSI CODE: %q\n", string(buf[:]))
-        // return EOF{}
+        code := string(buf[1:i])
+
+        switch code {
+        case "A": return ControlChar.UpArrow
+        case "B": return ControlChar.DownArrow
+        case "C": return ControlChar.RightArrow
+        case "D": return ControlChar.LeftArrow
+        }
+
 
     case '0': return EOF{}
     case 0x4: return EOT{}
@@ -76,9 +83,9 @@ read_line :: proc() -> string {
                 break read
             }
         case ControlChar:
-            switch t {
+            #partial switch t {
             case .Return:
-                term.cursor_return_down_by(1)
+                io.write_byte(shell.stdout, '\n')
                 break read
             case .Backspace:
                 b := strings.pop_byte(&shell.builder)
@@ -93,6 +100,5 @@ read_line :: proc() -> string {
         }
     }
 
-    fmt.println()
     return strings.to_string(shell.builder)
 }

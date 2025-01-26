@@ -3,6 +3,8 @@ package lush
 import "core:fmt"
 import "core:strings"
 import "core:mem"
+import "core:sys/posix"
+import "spawn"
 
 main :: proc() {
     when ODIN_DEBUG {
@@ -36,18 +38,50 @@ main :: proc() {
         shell_prompt()
         raw_line = read_line()
 
-        switch raw_line {
-        case "": continue
-        case "exit": break main
-        case "test": fmt.print("foo\r\n")
-        case "dump_stack": lua_dump_stack(shell.lua_state)
-        case "dump_globals": lua_dump_globals(shell.lua_state)
-        }
-
-        if raw_line[0] == ':' {
+        if len(raw_line) > 0 && raw_line[0] == ':' {
             lua_src := strings.clone_to_cstring(string(raw_line[1:]))
             lua_eval(lua_src)
             delete(lua_src)
+            continue
+        }
+
+        switch raw_line {
+        case "": continue
+        case "exit": break main
+        case "dump_stack": lua_dump_stack(shell.lua_state)
+        case "dump_globals": lua_dump_globals(shell.lua_state)
+        case:
+            parts := split_to_cstring(raw_line)
+            defer delete(parts)
+            child, err := spawn.spawn(..parts)
+            if err != .NONE {
+                if err == .ENOENT {
+                    fmt.printfln("command not found: %s", parts[0])
+                    continue
+                }
+                fmt.panicf("Failed to fork child process: %v\n", err)
+            }
+            for child_running(child.pid) {}
         }
     }
+}
+
+child_running :: proc(pid: int) -> bool {
+    status: i32
+    wait := posix.waitpid(posix.pid_t(pid), &status, {})
+    if wait == -1 {
+        panic("failed to get child process status")
+    }
+
+    return !posix.WIFEXITED(status) && !posix.WIFSIGNALED(status)
+}
+
+split_to_cstring :: proc(str: string, sep := " ") -> []cstring {
+    parts := strings.split(str, sep)
+    parts_c := make([]cstring, len(parts))
+    for p, i in parts {
+        parts_c[i] = strings.clone_to_cstring(p)
+    }
+    delete(parts)
+    return parts_c
 }
