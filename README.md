@@ -7,7 +7,6 @@ The codebase is currently a mess and probably will be for a while, but have a po
 
 ## Features
 - Direct Lua evaluation using `:` prefix
-- Raw terminal handling for key combinations
 - Not much else yet
 
 ## Status
