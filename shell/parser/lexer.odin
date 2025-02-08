@@ -1,4 +1,3 @@
-#+private file
 package parser
 
 import "core:mem"
@@ -12,7 +11,6 @@ Lexer :: struct {
     toks: [dynamic]Token,
 }
 
-@(export)
 lexer_init :: proc(input: string, alloc := context.temp_allocator) -> Lexer {
     return Lexer {
         input = utf8.string_to_runes(input, alloc),
@@ -21,92 +19,90 @@ lexer_init :: proc(input: string, alloc := context.temp_allocator) -> Lexer {
     }
 }
 
-@(export)
 lexer_destroy :: proc(l: ^Lexer) {
     delete(l.toks)
 }
 
-@(export)
 tokenize :: proc(l: ^Lexer) -> []Token {
     terminators := bit_set[0..=' ']{0, ' ', '\n'}
-    for !at_end(l) {
+    for !lexer_at_end(l) {
         l.start = l.current
 
-        ch := advance(l)
+        ch := lexer_advance(l)
         switch ch {
-        case 0: add_token(l, .EOF)
+        case 0: lexer_add_token(l, .EOF)
         case '\n', '\r': break
         case '\t', ' ': continue
-        case '|': add_token(l, .Pipe)
+        case '|': lexer_add_token(l, .Pipe)
         case '<':
-            if match(l, '<') { // <<
-                add_token(l, .TruncLeft)
+            if lexer_match(l, '<') { // <<
+                lexer_add_token(l, .TruncLeft)
             } else {
-                add_token(l, .RedirLeft)
+                lexer_add_token(l, .RedirLeft)
             }
 
         case '>':
-            if match(l, '>') { // >>
-                add_token(l, .TruncRight)
+            if lexer_match(l, '>') { // >>
+                lexer_add_token(l, .TruncRight)
             } else {
-                add_token(l, .RedirRight)
+                lexer_add_token(l, .RedirRight)
             }
 
         case '-':
-            for !match(l, ' ') && !match(l, '\n') {
-                advance(l)
+            for !lexer_match(l, ' ') && !lexer_match(l, '\n') {
+                lexer_advance(l)
             }
-            add_token(l, .Word)
+            lexer_add_token(l, .Word)
 
         case '$':
-            if match(l, '(') {
+            if lexer_match(l, '(') {
                 l.start = l.current
-                for peek(l) != ')' {
-                    advance(l)
+                for lexer_peek(l) != ')' {
+                    lexer_advance(l)
                 }
-                add_token(l, .Substitution)
-                advance(l)
+                lexer_add_token(l, .Substitution)
+                lexer_advance(l)
             } else {
                 l.start += 1 // discard $
-                for !(peek(l) in terminators) {
-                    advance(l)
+                for !(lexer_peek(l) in terminators) {
+                    lexer_advance(l)
                 }
-                add_token(l, .Variable)
+                lexer_add_token(l, .Variable)
             }
 
         case '\'':
             l.start = l.current
-            advance(l)
-            for peek(l) != '\'' {
-                advance(l)
+            lexer_advance(l)
+            for lexer_peek(l) != '\'' {
+                lexer_advance(l)
             }
-            add_token(l, .String)
-            advance(l)
+            lexer_add_token(l, .String)
+            lexer_advance(l)
 
         case '"':
             l.start = l.current
-            advance(l)
-            for peek(l) != '"' {
-                advance(l)
+            lexer_advance(l)
+            for lexer_peek(l) != '"' {
+                lexer_advance(l)
             }
-            add_token(l, .String)
-            advance(l)
+            lexer_add_token(l, .String)
+            lexer_advance(l)
 
         case '0'..='9':
-            for unicode.is_digit(peek(l)) {
-                advance(l)
+            for unicode.is_digit(lexer_peek(l)) {
+                lexer_advance(l)
             }
-            add_token(l, .Number)
+            lexer_add_token(l, .Number)
 
         case 'a'..='z', 'A'..='Z':
-            for !(peek(l) in terminators) {
-                advance(l)
+            for !(lexer_peek(l) in terminators) {
+                lexer_advance(l)
             }
 
-            if kw, ok := Keywords[get_string(l)]; ok {
-                add_token(l, kw)
+            if kw, ok := Keywords[lexer_get_string(l)]; ok {
+                lexer_add_token(l, kw)
             } else {
-                add_token(l, .Word)
+                lexer_add_token(l, .Word)
             }
         }
     }
@@ -114,12 +110,12 @@ tokenize :: proc(l: ^Lexer) -> []Token {
     return l.toks[:]
 }
 
-at_end :: proc(l: ^Lexer) -> bool {
+lexer_at_end :: proc(l: ^Lexer) -> bool {
     return l.current >= len(l.input)
 }
 
-advance :: proc(l: ^Lexer) -> rune {
-    if at_end(l) {
+lexer_advance :: proc(l: ^Lexer) -> rune {
+    if lexer_at_end(l) {
         return 0
     }
 
@@ -127,14 +123,14 @@ advance :: proc(l: ^Lexer) -> rune {
     return l.input[l.current]
 }
 
-peek :: proc(l: ^Lexer) -> rune {
-    if at_end(l) {
+lexer_peek :: proc(l: ^Lexer) -> rune {
+    if lexer_at_end(l) {
         return 0
     }
     return l.input[l.current]
 }
 
-look_ahead :: proc(l: ^Lexer, n := 1) -> rune {
+lexer_look_ahead :: proc(l: ^Lexer, n := 1) -> rune {
     if l.current + n >= len(l.input) {
         return 0
     }
@@ -142,12 +138,12 @@ look_ahead :: proc(l: ^Lexer, n := 1) -> rune {
     return l.input[l.current + n]
 }
 
-match :: proc(l: ^Lexer, expected: rune) -> bool {
-    if at_end(l) {
+lexer_match :: proc(l: ^Lexer, expected: rune) -> bool {
+    if lexer_at_end(l) {
         return false
     }
 
-    if peek(l) != expected {
+    if lexer_peek(l) != expected {
         return false
     }
 
@@ -155,12 +151,12 @@ match :: proc(l: ^Lexer, expected: rune) -> bool {
     return true
 }
 
-get_string :: proc(l: ^Lexer) -> string {
+lexer_get_string :: proc(l: ^Lexer) -> string {
     str := utf8.runes_to_string(l.input[l.start:l.current], l.alloc)
     return str
 }
 
-add_token :: proc(l: ^Lexer, type: TokenType) {
+lexer_add_token :: proc(l: ^Lexer, type: TokenType) {
     text := utf8.runes_to_string(l.input[l.start:l.current], l.alloc)
     append(&l.toks, Token {type, text})
 }
