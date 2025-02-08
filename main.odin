@@ -4,7 +4,12 @@ import "core:fmt"
 import "core:strings"
 import "core:mem"
 import "core:sys/posix"
+import "core:os"
+import vmem "core:mem/virtual"
 import "spawn"
+import "shell"
+import "script"
+import "types"
 
 main :: proc() {
     when ODIN_DEBUG {
@@ -29,30 +34,48 @@ main :: proc() {
         }
     }
 
-    shell_init()
-    defer shell_close()
-
+    lua_state := script.init()
+    script.eval(lua_state, `alias = { nv = "nvim" }`)
+    lush := shell.init()
+    defer shell.close(&lush)
+    lush.aliases, _ = script.get_aliases(lua_state)
+    fmt.printfln("aliases: %v", lush.aliases)
+    allocator := vmem.arena_allocator(&lush.arena)
 
     raw_line: string
-    main: for {
-        shell_prompt()
-        raw_line = read_line()
+    for !lush.should_shutdown {
+        tmp := vmem.arena_temp_begin(&lush.arena)
+        defer vmem.arena_temp_end(tmp)
+        shell.prompt(lush)
+        raw_line = shell.read_line(&lush)
 
         if len(raw_line) > 0 && raw_line[0] == ':' {
-            lua_src := strings.clone_to_cstring(string(raw_line[1:]))
-            lua_eval(lua_src)
-            delete(lua_src)
+            src := strings.clone_to_cstring(string(raw_line[1:]))
+            script.eval(lua_state, src)
+            delete(src)
             continue
         }
 
         switch raw_line {
         case "": continue
-        case "exit": break main
-        case "dump_stack": lua_dump_stack(shell.lua_state)
-        case "dump_globals": lua_dump_globals(shell.lua_state)
+        case "exit": shell.close(&lush)
+        case "dump_stack": script.debug_dump_stack(lua_state)
+        case "dump_globals": script.debug_dump_globals(lua_state)
         case:
+            if alias, ok := lush.aliases[raw_line]; ok {
+                raw_line = alias
+            }
             parts := split_to_cstring(raw_line)
             defer delete(parts)
+
+            if parts[0] == "cd" {
+                target, alloc := strings.remove(raw_line, "cd ", 1)
+
+                // defer if alloc do delete(target)
+                os.set_current_directory(target)
+                continue
+            }
+
             child, err := spawn.spawn(..parts)
             if err != .NONE {
                 if err == .ENOENT {

@@ -1,4 +1,4 @@
-package lush
+package shell
 
 Key :: union {
     EscapeKey,

@@ -1,11 +1,12 @@
-package lush
+package shell
 
 import "core:io"
 import "core:fmt"
 import "core:sys/linux"
 import "core:os"
 import "core:strings"
-import term "ansi_term"
+import vmem "core:mem/virtual"
+import term "../ansi_term"
 
 byte_available :: proc() -> bool {
     poll_fd := linux.Poll_Fd {
@@ -23,7 +24,7 @@ byte_available :: proc() -> bool {
     return ready > 0
 }
 
-read_key :: proc() -> Key {
+read_key :: proc(shell: Shell) -> Key {
     // buffer used for capturing ANSI escape codes
     // size of 16 bytes was chosen by carefully
     // considering that it's probably enough
@@ -63,42 +64,54 @@ read_key :: proc() -> Key {
     return nil
 }
 
-read_line :: proc() -> string {
-    strings.builder_reset(&shell.builder)
+read_line :: proc(shell: ^Shell) -> string {
+    allocator := vmem.arena_allocator(&shell.arena)
+
+    sb: strings.Builder
+    strings.builder_init(&sb, allocator)
 
     read: for {
-        key := read_key()
+        key := read_key(shell^)
 
         switch t in key {
         case AlphaNumKey:
             fmt.printf("%c", t.key)
-            strings.write_byte(&shell.builder, t.key)
+            strings.write_byte(&sb, t.key)
+
         case EscapeKey:
+
         case ShortcutKey:
             #partial switch t {
             case .Clear:
                 term.erase_screen()
                 term.cursor_move_to(1, 1)
-                strings.builder_reset(&shell.builder)
+                strings.builder_reset(&sb)
                 break read
             }
+
         case ControlChar:
             #partial switch t {
             case .Return:
                 io.write_byte(shell.stdout, '\n')
                 break read
+
             case .Backspace:
-                b := strings.pop_byte(&shell.builder)
+                b := strings.pop_byte(&sb)
                 if b > 0 {
                     term.cursor_left_by(1)
                     term.erase_line_from_cursor_to_end()
                 }
             }
+
         case ModKey:
+
         case EOF: break read
-        case EOT: return "exit"
+
+        case EOT:
+            close(shell)
+            return ""
         }
     }
 
-    return strings.to_string(shell.builder)
+    return strings.to_string(sb)
 }
