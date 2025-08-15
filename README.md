@@ -4,6 +4,8 @@ A custom Linux shell with Lua integration.
 
 ## Description
 
+This is a brand new project and is not usable yet.
+
 ## Building
 
 ## Usage
