@@ -17,7 +17,6 @@ init :: proc() -> (shell: Shell) {
     // TODO: decide config.lua location and eval it here
     shell.config = lua.get_config(shell.lua_state)
     editline.hist_size = shell.config.hist_size
-    // editline.hist_size = lua.get_hist_size(shell.lua_state)
 
     return shell
 }
@@ -30,6 +29,7 @@ deinit :: proc(shell: ^Shell) {
     lua.deinit(shell.lua_state)
 
     // this causes a bad free ???
+    // need to investigate
     // editline.uninitialize()
 }
 
@@ -37,6 +37,5 @@ main :: proc() {
     lush := init()
     defer deinit(&lush)
 
-    fmt.printfln("aliases: %v", lush.config.alias)
-    fmt.printfln("hist_size: %d", editline.hist_size)
+    
 }
